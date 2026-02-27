@@ -1,9 +1,12 @@
 import os
 import shutil
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from celery.result import AsyncResult
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 
 from app.core.config import settings
+from app.worker.celery_app import celery_app
 from app.worker.tasks import filter_image_task
 
 router = APIRouter()
@@ -42,3 +45,38 @@ async def process_image(file: UploadFile = File(...)):
         "message": "Image uploaded successfully. Processing in background.",
         "task_id": task.id,
     }
+
+
+@router.get("/status/{task_id}")
+async def get_task_status(task_id: str, request: Request):
+    """
+    Checks Redis for the current status of the task.
+    """
+    task_result = AsyncResult(task_id, app=celery_app)
+
+    response = {
+        "task_id": task_id,
+        "status": task_result.status,
+    }
+
+    if task_result.status == "SUCCESS":
+        filename = task_result.result["file"]
+
+        base = str(request.base_url)
+
+        response["download_url"] = f"{base}api/v1/download/{filename}"
+
+    return response
+
+
+@router.get("/download/{filename}")
+async def download_result(filename: str):
+    """
+    download the processed image.
+    """
+    file_path = os.path.join(settings.PROCESSED_DIR, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found or expired.")
+
+    return FileResponse(path=file_path, filename=filename, media_type="image/jpeg")
