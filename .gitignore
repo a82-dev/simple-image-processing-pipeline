@@ -33,3 +33,6 @@ archive.zip
 
 
 .env
+
+/static
+/assets

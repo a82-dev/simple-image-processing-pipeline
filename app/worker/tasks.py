@@ -8,7 +8,7 @@ from app.worker.image_utils import apply_heavy_filter
 def filter_image_task(self, filename: str):
     try:
         # fake sleep just to see the flow
-        time.sleep(5)
+        time.sleep(10)
 
         output_file = apply_heavy_filter(filename)
 
